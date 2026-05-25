@@ -12,13 +12,45 @@ $folders = @{
     Other   = "$base\Other"
 }
 
-# Create folders safely
+# Create folders
 $folders.Values | ForEach-Object {
     if (!(Test-Path $_)) {
         New-Item -ItemType Directory -Path $_ -Force | Out-Null
     }
 }
 
+# =========================
+# MEDIAFIRE RESOLVER
+# =========================
+function Resolve-MediaFire {
+    param([string]$Url)
+
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+
+        $html = $wc.DownloadString($Url)
+
+        # Primary MediaFire pattern
+        if ($html -match 'href="(https://download\d+\.mediafire\.com[^"]+)"') {
+            return $matches[1]
+        }
+
+        # Backup pattern
+        if ($html -match 'downloadurl="(https://download[^"]+)"') {
+            return $matches[1]
+        }
+
+        return $null
+    }
+    catch {
+        return $null
+    }
+}
+
+# =========================
+# DOWNLOAD FUNCTION
+# =========================
 function Download-File {
     param(
         [string]$Url,
@@ -31,17 +63,38 @@ function Download-File {
     try {
         Write-Host "Downloading: $OutFile" -ForegroundColor Cyan
 
-        Invoke-WebRequest -Uri $Url -OutFile $outPath -ErrorAction Stop
+        # Detect MediaFire and resolve real URL
+        if ($Url -like "*mediafire.com*") {
+            Write-Host "  Resolving MediaFire link..." -ForegroundColor DarkCyan
+
+            $resolved = Resolve-MediaFire $Url
+
+            if ($resolved) {
+                $Url = $resolved
+                Write-Host "  Resolved OK" -ForegroundColor DarkGreen
+            }
+            else {
+                Write-Host "  MediaFire resolve failed, skipping" -ForegroundColor Red
+                return
+            }
+        }
+
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+
+        $wc.DownloadFile($Url, $outPath)
 
         Write-Host "OK: $OutFile" -ForegroundColor Green
     }
     catch {
         Write-Host "FAILED: $OutFile" -ForegroundColor Red
-        Write-Host "  -> $($_.Exception.Message)" -ForegroundColor DarkRed
+        Write-Host $_.Exception.Message -ForegroundColor DarkRed
     }
 }
 
-# Simple safe downloader (NO -Parallel, stock PS compatible)
+# =========================
+# SAFE RUNNER
+# =========================
 function Run-Downloads {
     param(
         [array]$list,
@@ -53,6 +106,9 @@ function Run-Downloads {
     }
 }
 
+# =========================
+# TOOL LISTS
+# =========================
 function Download-All {
 
     $spokwnTools = @(
@@ -102,14 +158,13 @@ function Download-All {
         @{ Name="System Informer"; Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer.exe" },
         @{ Name="Everything Search"; Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="everything.exe" },
 
-        # NOTE: MediaFire often blocks direct downloads in Invoke-WebRequest
         @{ Name="FTK Imager"; Url="https://www.mediafire.com/file/qqhbjhop1zgufsa/Exterro_FTK_Imager_%28x64%29-4.7.3.81.exe/file"; File="ftk_imager.exe" },
 
         @{ Name="InjGen"; Url="https://github.com/NotRequiem/InjGen/releases/download/v2.0/InjGen.exe"; File="InjGen.exe" },
         @{ Name="PrefetchView++"; Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.5.4/PrefetchView++.exe"; File="PrefetchView++.exe" },
         @{ Name="Velociraptor"; Url="https://github.com/Velocidex/velociraptor/releases/download/v0.6.6-1/velociraptor-v0.6.6-3-windows-386.exe"; File="velociraptor.exe" },
         @{ Name="Recaf"; Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-4x-alpha-win-86x64.jar"; File="recaf.jar" },
-        @{ Name="Magnet RESPONSE"; Url="https://download1523.mediafire.com/gk67r6nckolg0pVDmP5hLkBI3VjM7Af0YDg8r64Ud95cg71fsgx30IIZdel2UnxZwffrJGajQqcaacuX92JTv2k9t0QhD0Q4QoMj_6KwY048nunCaPizYhnz2kjBXikuFd3nZcnceD2SJMOUOwJATJ-zBD7RIK-eXpcSI8L1JMUYXA/lxnu4z9sqzz63lc/MRCv120.exe"; File="magnet_response.exe" },
+        @{ Name="Magnet RESPONSE"; Url="https://download1523.mediafire.com/..."; File="magnet_response.exe" },
         @{ Name="Hayabusa"; Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa.zip" }
     )
 
@@ -124,8 +179,6 @@ function Delete-All {
     if (Test-Path $base) {
         Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "Deleted C:\SS" -ForegroundColor Yellow
-    } else {
-        Write-Host "Nothing to delete." -ForegroundColor DarkYellow
     }
 }
 
