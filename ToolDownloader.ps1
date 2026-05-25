@@ -22,25 +22,17 @@ function Download-File {
     $outPath = Join-Path $DestFolder $OutFile
 
     try {
-        Start-BitsTransfer -Source $Url -Destination $outPath -ErrorAction Stop
+        Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -ErrorAction Stop
     }
     catch {
-        Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -ErrorAction SilentlyContinue
+        Write-Host "FAILED: $OutFile" -ForegroundColor Red
     }
 }
 
 function Run-Downloads($list, $folder) {
     $list | ForEach-Object -Parallel {
-        param($item, $folder)
-
-        try {
-            Start-BitsTransfer -Source $item.Url -Destination (Join-Path $folder $item.File) -ErrorAction Stop
-        }
-        catch {
-            Invoke-WebRequest -Uri $item.Url -OutFile (Join-Path $folder $item.File) -UseBasicParsing -ErrorAction SilentlyContinue
-        }
-
-    } -ThrottleLimit 8 -ArgumentList $_, $folder
+        Invoke-WebRequest -Uri $_.Url -OutFile (Join-Path $using:folder $_.File) -UseBasicParsing -ErrorAction SilentlyContinue
+    } -ThrottleLimit 10
 }
 
 function Download-All {
@@ -104,7 +96,7 @@ function Download-All {
 
 function Delete-All {
     Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Deleted all tools"
+    Write-Host "Deleted C:\SS"
 }
 
 while ($true) {
@@ -115,7 +107,6 @@ while ($true) {
     Write-Host "[1] Download all tools"
     Write-Host "[2] Delete all tools"
     Write-Host "[3] Exit"
-    Write-Host ""
 
     $choice = Read-Host "Select"
 
