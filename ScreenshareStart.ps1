@@ -11,3 +11,4 @@ function Start-PersistentScript {
 }
 
 Start-PersistentScript "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/CommonDirectories.ps1"
+Start-PersistentScript "https://raw.githubusercontent.com/1Mets/tool-downloader/refs/heads/main/ToolDownloader.ps1"
