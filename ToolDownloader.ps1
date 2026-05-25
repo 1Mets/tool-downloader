@@ -1,3 +1,4 @@
+cls
 $ProgressPreference = 'SilentlyContinue'
 
 $base = "C:\SS"
