@@ -24,16 +24,22 @@ function Download-File {
         Start-BitsTransfer -Source $Url -Destination $outPath -ErrorAction Stop
     }
     catch {
+        Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -ErrorAction SilentlyContinue
+    }
+}
+
+function Run-Downloads($list, $folder) {
+    $list | ForEach-Object -Parallel {
+        param($item, $folder)
+
         try {
-            Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -ErrorAction Stop
+            Start-BitsTransfer -Source $item.Url -Destination (Join-Path $folder $item.File) -ErrorAction Stop
         }
         catch {
-            Write-Host "FAILED: $OutFile" -ForegroundColor Red
-            return
+            Invoke-WebRequest -Uri $item.Url -OutFile (Join-Path $folder $item.File) -UseBasicParsing -ErrorAction SilentlyContinue
         }
-    }
 
-    Write-Host "Downloaded: $OutFile"
+    } -ThrottleLimit 8 -ArgumentList $_, $folder
 }
 
 function Download-All {
@@ -49,10 +55,6 @@ function Download-All {
         @{Url="https://github.com/spokwn/prefetch-parser/releases/download/v1.5.5/PrefetchParser.exe"; File="PrefetchParser.exe"}
     )
 
-    foreach ($t in $spokwnTools) {
-        Download-File $t.Url $t.File $folders.Spokwn
-    }
-
     $orbTools = @(
         @{Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.6.6/pv++.exe"; File="pv++.exe"},
         @{Url="https://github.com/Orbdiff/BAMReveal/releases/download/v1.3/BAMReveal.exe"; File="BAMReveal.exe"},
@@ -63,10 +65,6 @@ function Download-All {
         @{Url="https://github.com/Orbdiff/CheckDeletedUSN/releases/download/v0.2.1/CheckDeletedUSN.exe"; File="CheckDeletedUSN.exe"},
         @{Url="https://github.com/Orbdiff/UserAssistView/releases/download/v1.0/UserAssistView.exe"; File="UserAssistView.exe"}
     )
-
-    foreach ($t in $orbTools) {
-        Download-File $t.Url $t.File $folders.OrbDiff
-    }
 
     $zimmermanTools = @(
         @{Url="https://download.ericzimmermanstools.com/net9/AmcacheParser.zip"; File="AmcacheParser.zip"},
@@ -80,10 +78,6 @@ function Download-All {
         @{Url="https://download.ericzimmermanstools.com/net9/MFTECmd.zip"; File="MFTECmd.zip"}
     )
 
-    foreach ($t in $zimmermanTools) {
-        Download-File $t.Url $t.File $folders.Zimmer
-    }
-
     $nirsoftTools = @(
         @{Url="https://www.nirsoft.net/utils/winprefetchview-x64.zip"; File="winprefetchview.zip"},
         @{Url="https://www.nirsoft.net/utils/usbdeview-x64.zip"; File="usbdeview.zip"},
@@ -93,10 +87,6 @@ function Download-All {
         @{Url="https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"; File="previousfilesrecovery.zip"}
     )
 
-    foreach ($t in $nirsoftTools) {
-        Download-File $t.Url $t.File $folders.Nirsoft
-    }
-
     $otherTools = @(
         @{Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa.zip"},
         @{Url="https://www.mediafire.com/file/qqhbjhop1zgufsa/Exterro_FTK_Imager_%28x64%29-4.7.3.81.exe/file"; File="FTK_Imager.exe"},
@@ -104,25 +94,40 @@ function Download-All {
         @{Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="Everything.exe"}
     )
 
-    foreach ($t in $otherTools) {
-        Download-File $t.Url $t.File $folders.Other
-    }
+    Run-Downloads $spokwnTools $folders.Spokwn
+    Run-Downloads $orbTools $folders.OrbDiff
+    Run-Downloads $zimmermanTools $folders.Zimmer
+    Run-Downloads $nirsoftTools $folders.Nirsoft
+    Run-Downloads $otherTools $folders.Other
 }
 
 function Delete-All {
-    Remove-Item "C:\SS" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "All tools deleted"
+    Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "Deleted all tools"
 }
 
 while ($true) {
+
+    Write-Host ""
     Write-Host "[+] vMets Tool Downloader"
     Write-Host ""
     Write-Host "[1] Download all tools"
     Write-Host "[2] Delete all tools"
     Write-Host "[3] Exit"
+    Write-Host ""
+
     $choice = Read-Host "Select"
 
-    if ($choice -eq "1") { Download-All }
-    elseif ($choice -eq "2") { Delete-All }
-    elseif ($choice -eq "3") { break }
+    if ($choice -eq "1") {
+        $confirm = Read-Host "Download ALL tools? (Y/N)"
+        if ($confirm -match '^[Yy]$') {
+            Download-All
+        }
+    }
+    elseif ($choice -eq "2") {
+        Delete-All
+    }
+    elseif ($choice -eq "3") {
+        break
+    }
 }
