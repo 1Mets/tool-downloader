@@ -81,14 +81,12 @@ function Run($list, $folder, $limit = 8) {
 }
 
 # =========================
-# FULL TOOL LISTS (ALL URLS RESTORED)
+# TOOL LISTS (MEDIAFIRE REMOVED)
 # =========================
 
 function Download-All {
 
-    # -------------------------
-    # SPOKWN
-    # -------------------------
+    # ---------------- SPOKWN ----------------
     $spokwn = @(
         @{Url="https://github.com/spokwn/KernelLiveDumpTool/releases/download/v1.1/KernelLiveDumpTool.exe"; File="KernelLiveDumpTool.exe"},
         @{Url="https://github.com/spokwn/BAM-parser/releases/download/v1.2.9/BAMParser.exe"; File="BAMParser.exe"},
@@ -100,9 +98,7 @@ function Download-All {
         @{Url="https://github.com/spokwn/prefetch-parser/releases/download/v1.5.5/PrefetchParser.exe"; File="PrefetchParser.exe"}
     )
 
-    # -------------------------
-    # ORBDIFF
-    # -------------------------
+    # ---------------- ORBDIFF ----------------
     $orb = @(
         @{Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.6.6/pv++.exe"; File="pv++.exe"},
         @{Url="https://github.com/Orbdiff/BAMReveal/releases/download/v1.3/BAMReveal.exe"; File="BAMReveal.exe"},
@@ -114,9 +110,7 @@ function Download-All {
         @{Url="https://github.com/Orbdiff/UserAssistView/releases/download/v1.0/UserAssistView.exe"; File="UserAssistView.exe"}
     )
 
-    # -------------------------
-    # ZIMMERMAN
-    # -------------------------
+    # ---------------- ZIMMERMAN ----------------
     $zimmer = @(
         @{Url="https://download.ericzimmermanstools.com/net9/AmcacheParser.zip"; File="AmcacheParser.zip"},
         @{Url="https://download.ericzimmermanstools.com/net9/AppCompatCacheParser.zip"; File="AppCompatCacheParser.zip"},
@@ -129,9 +123,7 @@ function Download-All {
         @{Url="https://download.ericzimmermanstools.com/net9/MFTECmd.zip"; File="MFTECmd.zip"}
     )
 
-    # -------------------------
-    # NIRSOFT
-    # -------------------------
+    # ---------------- NIRSOFT ----------------
     $nirsoft = @(
         @{Url="https://www.nirsoft.net/utils/winprefetchview-x64.zip"; File="winprefetchview.zip"},
         @{Url="https://www.nirsoft.net/utils/usbdeview-x64.zip"; File="usbdeview.zip"},
@@ -141,9 +133,7 @@ function Download-All {
         @{Url="https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"; File="previousfilesrecovery.zip"}
     )
 
-    # -------------------------
-    # OTHER
-    # -------------------------
+    # ---------------- OTHER ----------------
     $other = @(
         @{Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer.exe"},
         @{Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="everything.exe"},
