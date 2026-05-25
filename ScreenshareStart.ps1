@@ -5,7 +5,7 @@ function Start-PersistentScript {
         [string]$Url
     )
 
-    $command = "powershell -NoExit -ExecutionPolicy Bypass -Command `"try { iex (irm '$Url') }"
+    $command = "powershell -NoExit -ExecutionPolicy Bypass -Command `"try { iex (irm '$Url') } catch { Write-Host `$_ -ForegroundColor Red }; Write-Host ''; Write-Host '' -ForegroundColor Cyan; while (`$true) { Start-Sleep 3600 }`""
     Start-Process cmd.exe -Verb RunAs -ArgumentList "/k $command"
 }
 
