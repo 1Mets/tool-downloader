@@ -12,27 +12,45 @@ $folders = @{
     Other   = "$base\Other"
 }
 
+# Create folders safely
 $folders.Values | ForEach-Object {
-    New-Item -ItemType Directory -Path $_ -Force | Out-Null
+    if (!(Test-Path $_)) {
+        New-Item -ItemType Directory -Path $_ -Force | Out-Null
+    }
 }
 
 function Download-File {
-    param($Url, $OutFile, $DestFolder)
+    param(
+        [string]$Url,
+        [string]$OutFile,
+        [string]$DestFolder
+    )
 
     $outPath = Join-Path $DestFolder $OutFile
 
     try {
-        Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "Downloading: $OutFile" -ForegroundColor Cyan
+
+        Invoke-WebRequest -Uri $Url -OutFile $outPath -ErrorAction Stop
+
+        Write-Host "OK: $OutFile" -ForegroundColor Green
     }
     catch {
         Write-Host "FAILED: $OutFile" -ForegroundColor Red
+        Write-Host "  -> $($_.Exception.Message)" -ForegroundColor DarkRed
     }
 }
 
-function Run-Downloads($list, $folder) {
-    $list | ForEach-Object -Parallel {
-        Invoke-WebRequest -Uri $_.Url -OutFile (Join-Path $using:folder $_.File) -UseBasicParsing -ErrorAction SilentlyContinue
-    } -ThrottleLimit 10
+# Simple safe downloader (NO -Parallel, stock PS compatible)
+function Run-Downloads {
+    param(
+        [array]$list,
+        [string]$folder
+    )
+
+    foreach ($item in $list) {
+        Download-File -Url $item.Url -OutFile $item.File -DestFolder $folder
+    }
 }
 
 function Download-All {
@@ -81,15 +99,18 @@ function Download-All {
     )
 
     $otherTools = @(
-        @{ Name="System Informer"; Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer-build-canary-setup.exe" },
-        @{ Name="Everything Search"; Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="Everything-1.4.1.1029.x86-Setup.exe" },
-        @{ Name="FTK Imager"; Url="https://www.mediafire.com/file/qqhbjhop1zgufsa/Exterro_FTK_Imager_%28x64%29-4.7.3.81.exe/file"; File="Exterro_FTK_Imager_x64-4.7.3.81.exe" }
+        @{ Name="System Informer"; Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer.exe" },
+        @{ Name="Everything Search"; Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="everything.exe" },
+
+        # NOTE: MediaFire often blocks direct downloads in Invoke-WebRequest
+        @{ Name="FTK Imager"; Url="https://www.mediafire.com/file/qqhbjhop1zgufsa/Exterro_FTK_Imager_%28x64%29-4.7.3.81.exe/file"; File="ftk_imager.exe" },
+
         @{ Name="InjGen"; Url="https://github.com/NotRequiem/InjGen/releases/download/v2.0/InjGen.exe"; File="InjGen.exe" },
         @{ Name="PrefetchView++"; Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.5.4/PrefetchView++.exe"; File="PrefetchView++.exe" },
-        @{ Name="Velociraptor"; Url="https://github.com/Velocidex/velociraptor/releases/download/v0.6.6-1/velociraptor-v0.6.6-3-windows-386.exe"; File="velociraptor-v0.6.6-3-windows-386.exe" },
-        @{ Name="Recaf"; Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-4x-alpha-win-86x64.jar"; File="recaf-4x-alpha-win-86x64.jar" },
-        @{ Name="Magnet RESPONSE"; Url="https://download1523.mediafire.com/gk67r6nckolg0pVDmP5hLkBI3VjM7Af0YDg8r64Ud95cg71fsgx30IIZdel2UnxZwffrJGajQqcaacuX92JTv2k9t0QhD0Q4QoMj_6KwY048nunCaPizYhnz2kjBXikuFd3nZcnceD2SJMOUOwJATJ-zBD7RIK-eXpcSI8L1JMUYXA/lxnu4z9sqzz63lc/MRCv120.exe"; File="MRCv120.exe" },
-        @{ Name="Hayabusa"; Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa-3.6.0-win-x64.zip" }
+        @{ Name="Velociraptor"; Url="https://github.com/Velocidex/velociraptor/releases/download/v0.6.6-1/velociraptor-v0.6.6-3-windows-386.exe"; File="velociraptor.exe" },
+        @{ Name="Recaf"; Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-4x-alpha-win-86x64.jar"; File="recaf.jar" },
+        @{ Name="Magnet RESPONSE"; Url="https://download1523.mediafire.com/gk67r6nckolg0pVDmP5hLkBI3VjM7Af0YDg8r64Ud95cg71fsgx30IIZdel2UnxZwffrJGajQqcaacuX92JTv2k9t0QhD0Q4QoMj_6KwY048nunCaPizYhnz2kjBXikuFd3nZcnceD2SJMOUOwJATJ-zBD7RIK-eXpcSI8L1JMUYXA/lxnu4z9sqzz63lc/MRCv120.exe"; File="magnet_response.exe" },
+        @{ Name="Hayabusa"; Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa.zip" }
     )
 
     Run-Downloads $spokwnTools $folders.Spokwn
@@ -100,8 +121,12 @@ function Download-All {
 }
 
 function Delete-All {
-    Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Deleted C:\SS"
+    if (Test-Path $base) {
+        Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Deleted C:\SS" -ForegroundColor Yellow
+    } else {
+        Write-Host "Nothing to delete." -ForegroundColor DarkYellow
+    }
 }
 
 while ($true) {
@@ -115,16 +140,15 @@ while ($true) {
 
     $choice = Read-Host "Select"
 
-    if ($choice -eq "1") {
-        $confirm = Read-Host "Download ALL tools? (Y/N)"
-        if ($confirm -match '^[Yy]$') {
-            Download-All
+    switch ($choice) {
+        "1" {
+            $confirm = Read-Host "Download ALL tools? (Y/N)"
+            if ($confirm -match '^[Yy]$') {
+                Download-All
+            }
         }
-    }
-    elseif ($choice -eq "2") {
-        Delete-All
-    }
-    elseif ($choice -eq "3") {
-        break
+        "2" { Delete-All }
+        "3" { break }
+        default { Write-Host "Invalid option" -ForegroundColor Red }
     }
 }
