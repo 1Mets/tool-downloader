@@ -13,3 +13,6 @@ Start-PersistentScript "https://raw.githubusercontent.com/praiselily/lilith-ps/r
 Start-PersistentScript "https://raw.githubusercontent.com/1Mets/tool-downloader/refs/heads/main/ToolDownloader.ps1"
 Start-PersistentScript "https://raw.githubusercontent.com/praiselily/WeHateFakers/refs/heads/main/HotspotLogs.ps1"
 Start-PersistentScript "https://raw.githubusercontent.com/praiselily/lilith-ps/refs/heads/main/Services.ps1"
+
+Start-Process explorer.exe $env:TEMP
+Start-Process explorer.exe "shell:recent"
