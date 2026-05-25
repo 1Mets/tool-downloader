@@ -16,3 +16,4 @@ Start-PersistentScript "https://raw.githubusercontent.com/praiselily/lilith-ps/r
 
 Start-Process explorer.exe $env:TEMP
 Start-Process explorer.exe "shell:recent"
+Start-Process explorer.exe "shell:startup"
