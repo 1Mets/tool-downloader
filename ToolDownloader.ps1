@@ -13,28 +13,19 @@ $folders = @{
     Other   = "$base\Other"
 }
 
+# Create folders
 $folders.Values | ForEach-Object {
     New-Item -ItemType Directory -Path $_ -Force | Out-Null
 }
 
 # =========================
-# ZIP EXTRACT
-# =========================
-function Extract-Zip($file, $dest) {
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($file, $dest)
-    } catch {}
-}
-
-# =========================
 # DOWNLOAD JOB
 # =========================
-function Start-JobDownload($url, $file, $folder) {
+function Start-JobDownload($url, $file, $folder, $type = "normal", $jobId) {
 
-    Start-Job -ArgumentList $url, $file, $folder -ScriptBlock {
+    Start-Job -ArgumentList $url, $file, $folder, $type, $jobId -ScriptBlock {
 
-        param($url, $file, $folder)
+        param($url, $file, $folder, $type, $jobId)
 
         try {
             $wc = New-Object System.Net.WebClient
@@ -42,49 +33,119 @@ function Start-JobDownload($url, $file, $folder) {
 
             $path = Join-Path $folder $file
             $wc.DownloadFile($url, $path)
-
+            
             if ($file -like "*.zip") {
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
-                [System.IO.Compression.ZipFile]::ExtractToDirectory($path, $folder)
+                
+                if ($type -eq "zimmerman") {
+                    $subfolderName = [System.IO.Path]::GetFileNameWithoutExtension($file)
+                    $extractPath = Join-Path $folder $subfolderName
+                    New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($path, $extractPath)
+                    Remove-Item $path -Force -ErrorAction SilentlyContinue
+                }
+                elseif ($type -eq "nirsoft") {
+                    $zip = [System.IO.Compression.ZipFile]::OpenRead($path)
+                    foreach ($entry in $zip.Entries) {
+                        if ($entry.Name -like "*.exe" -or $entry.Name -like "*.EXE") {
+                            $targetPath = Join-Path $folder $entry.Name
+                            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+                        }
+                    }
+                    $zip.Dispose()
+                    Remove-Item $path -Force -ErrorAction SilentlyContinue
+                }
+                elseif ($type -eq "die") {
+                    $extractPath = Join-Path $folder "Detect It Easy"
+                    New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($path, $extractPath)
+                    Remove-Item $path -Force -ErrorAction SilentlyContinue
+                }
+                else {
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($path, $folder)
+                }
             }
 
-            "OK: $file"
+            return "OK|$jobId|$file"
         }
         catch {
-            "FAIL: $file"
+            return "FAIL|$jobId|$file|$($_.Exception.Message)"
         }
     }
 }
 
 # =========================
-# RUNNER (FAST PARALLEL)
+# RUNNER WITH PROGRESS DISPLAY
 # =========================
-function Run($list, $folder, $limit = 8) {
-
+function Run($list, $folderName, $type = "normal", $limit = 8) {
+    
+    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host "  📁 Downloading to: $folderName" -ForegroundColor Yellow
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    
+    $folderPath = $folders[$folderName]
     $jobs = @()
-
-    foreach ($i in $list) {
-
-        $jobs += Start-JobDownload $i.Url $i.File $folder
-
-        while ((Get-Job -State Running).Count -ge $limit) {
+    $total = $list.Count
+    
+    # Start all jobs
+    $jobId = 0
+    foreach ($item in $list) {
+        $jobId++
+        $jobs += Start-JobDownload $item.Url $item.File $folderPath $type $jobId
+        Start-Sleep -Milliseconds 50  # Small delay to prevent overwhelming the system
+        
+        # Limit concurrent jobs
+        while (($jobs | Where-Object {$_.State -eq 'Running'}).Count -ge $limit) {
             Start-Sleep -Milliseconds 200
         }
     }
-
-    Wait-Job $jobs | Out-Null
-
-    $jobs | ForEach-Object {
-        Receive-Job $_
-        Remove-Job $_
+    
+    # Wait for all jobs to complete
+    $allJobs = $jobs
+    while (($allJobs | Where-Object {$_.State -eq 'Running' -or $_.State -eq 'NotStarted'}).Count -gt 0) {
+        $running = ($allJobs | Where-Object {$_.State -eq 'Running'}).Count
+        $completed = ($allJobs | Where-Object {$_.State -eq 'Completed'}).Count
+        $failed = ($allJobs | Where-Object {$_.State -eq 'Failed'}).Count
+        $percent = [math]::Round((($completed + $failed) / $total) * 100, 0)
+        
+        Write-Host "`r  Progress: [$($completed + $failed)/$total] $percent% | Running: $running | Failed: $failed" -ForegroundColor Green -NoNewline
+        Start-Sleep -Milliseconds 500
     }
+    
+    Write-Host "`n"  # New line after progress
+    
+    # Receive results
+    $success = 0
+    $failures = 0
+    
+    foreach ($job in $allJobs) {
+        $result = Receive-Job $job
+        Remove-Job $job
+        
+        if ($result -match "OK\|") {
+            $success++
+            $parts = $result -split '\|'
+            Write-Host "  ✓ $($parts[2])" -ForegroundColor Green
+        } else {
+            $failures++
+            $parts = $result -split '\|'
+            Write-Host "  ✗ $($parts[2])" -ForegroundColor Red
+        }
+    }
+    
+    Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
+    Write-Host "  ✅ Successful: $success  |  ❌ Failed: $failures" -ForegroundColor $(if ($failures -eq 0) { "Green" } else { "Yellow" })
 }
 
 # =========================
-# TOOL LISTS (MEDIAFIRE REMOVED)
+# TOOL LISTS
 # =========================
 
 function Download-All {
+
+    Write-Host "`n╔════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║              STARTING DOWNLOAD PROCESS                 ║" -ForegroundColor Cyan
+    Write-Host "╚════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 
     # ---------------- SPOKWN ----------------
     $spokwn = @(
@@ -107,7 +168,8 @@ function Download-All {
         @{Url="https://github.com/Orbdiff/AmcacheParser/releases/download/v1.0/AmcacheParser.exe"; File="AmcacheParser.exe"},
         @{Url="https://github.com/Orbdiff/JARParser/releases/download/v1.2/JARParser.exe"; File="JARParser.exe"},
         @{Url="https://github.com/Orbdiff/CheckDeletedUSN/releases/download/v0.2.1/CheckDeletedUSN.exe"; File="CheckDeletedUSN.exe"},
-        @{Url="https://github.com/Orbdiff/UserAssistView/releases/download/v1.0/UserAssistView.exe"; File="UserAssistView.exe"}
+        @{Url="https://github.com/Orbdiff/UserAssistView/releases/download/v1.0/UserAssistView.exe"; File="UserAssistView.exe"},
+        @{Url="https://github.com/Orbdiff/SSTool/releases/download/yay/SSTool.exe"; File="SSTool.exe"}
     )
 
     # ---------------- ZIMMERMAN ----------------
@@ -130,28 +192,43 @@ function Download-All {
         @{Url="https://www.nirsoft.net/utils/networkusageview-x64.zip"; File="networkusageview.zip"},
         @{Url="https://www.nirsoft.net/utils/alternatestreamview-x64.zip"; File="alternatestreamview.zip"},
         @{Url="https://www.nirsoft.net/utils/uninstallview-x64.zip"; File="uninstallview.zip"},
-        @{Url="https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"; File="previousfilesrecovery.zip"}
+        @{Url="https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"; File="previousfilesrecovery.zip"},
+        @{Url="https://www.nirsoft.net/utils/fulleventlogview-x64.zip"; File="fulleventlogview.zip"},
+        @{Url="https://www.nirsoft.net/utils/taskschedulerview-x64.zip"; File="taskschedulerview.zip"},
+        @{Url="https://www.nirsoft.net/utils/driverview-x64.zip"; File="driverview.zip"},
+        @{Url="https://www.nirsoft.net/utils/userassistview.zip"; File="userassistview.zip"},
+        @{Url="https://www.nirsoft.net/utils/regscanner-x64.zip"; File="regscanner.zip"},
+        @{Url="https://www.nirsoft.net/utils/lastactivityview.zip"; File="lastactivityview.zip"}
     )
 
     # ---------------- OTHER ----------------
     $other = @(
-        @{Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="systeminformer.exe"},
+        @{Url="https://github.com/winsiderss/si-builds/releases/download/3.2.25297.1516/systeminformer-build-canary-setup.exe"; File="system-informer-canary-setup.exe"},
         @{Url="https://www.voidtools.com/Everything-1.4.1.1029.x86-Setup.exe"; File="everything.exe"},
         @{Url="https://github.com/NotRequiem/InjGen/releases/download/v2.0/InjGen.exe"; File="InjGen.exe"},
+        @{Url="https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe"; File="FTKImager.exe"},
         @{Url="https://github.com/Orbdiff/PrefetchView/releases/download/v1.5.4/PrefetchView++.exe"; File="PrefetchView++.exe"},
         @{Url="https://github.com/Velocidex/velociraptor/releases/download/v0.6.6-1/velociraptor-v0.6.6-3-windows-386.exe"; File="velociraptor.exe"},
         @{Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-4x-alpha-win-86x64.jar"; File="recaf.jar"},
-        @{Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa.zip"}
+        @{Url="https://github.com/Yamato-Security/hayabusa/releases/download/v3.6.0/hayabusa-3.6.0-win-x64.zip"; File="hayabusa.zip"},
+        @{Url="https://github.com/horsicq/DIE-engine/releases/download/3.10/die_win64_portable_3.10_x64.zip"; File="die_win64_portable.zip"},
+        @{Url="https://github.com/MeowTonynoh/MeowDoomsdayFucker/releases/download/V.1.2/MeowDoomsdayFucker.exe"; File="MeowDoomsdayFucker.exe"},
+        @{Url="https://github.com/MeowTonynoh/MeowResolver/releases/download/MeowResolver/MeowResolver.exe"; File="MeowResolver.exe"},
+        @{Url="https://github.com/ItzIceHere/RedLotus-Mod-Analyzer/releases/download/RL/RedLotusModAnalyzer.exe"; File="RedLotusModAnalyzer.exe"},
+        @{Url="https://github.com/Col-E/Recaf/releases/download/4.0.0-alpha/recaf-launcher-gui-0.8.8.jar"; File="RecafLauncher.jar"}
     )
 
-    Run $spokwn $folders.Spokwn
-    Run $orb $folders.OrbDiff
-    Run $zimmer $folders.Zimmer
-    Run $nirsoft $folders.Nirsoft
-    Run $other $folders.Other
+    # Run downloads with proper flow control
+    Run $spokwn "Spokwn" "normal"
+    Run $orb "OrbDiff" "normal"
+    Run $zimmer "Zimmer" "zimmerman"
+    Run $nirsoft "Nirsoft" "nirsoft"
+    Run $other "Other" "die"
 
-    Write-Host "`nALL DOWNLOADS COMPLETE" -ForegroundColor Green
-    Read-Host "Press Enter to exit"
+    Write-Host "`n╔════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║          ✅ ALL DOWNLOADS COMPLETE ✅                   ║" -ForegroundColor Green
+    Write-Host "╚════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Read-Host "`nPress Enter to exit"
     exit
 }
 
@@ -159,8 +236,12 @@ function Download-All {
 # DELETE
 # =========================
 function Delete-All {
-    Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Deleted C:\SS"
+    if (Test-Path $base) {
+        Remove-Item $base -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "`n🗑️  Deleted: $base" -ForegroundColor Red
+    } else {
+        Write-Host "`n⚠️  Folder not found: $base" -ForegroundColor Yellow
+    }
 }
 
 # =========================
@@ -169,11 +250,15 @@ function Delete-All {
 while ($true) {
 
     Write-Host ""
-    Write-Host "[1] Download all tools"
-    Write-Host "[2] Delete tools"
-    Write-Host "[3] Exit"
+    Write-Host "╔════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║     🔧 TOOL DOWNLOADER v2.0         ║" -ForegroundColor Cyan
+    Write-Host "╠════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "║  [1] Download all tools            ║" -ForegroundColor White
+    Write-Host "║  [2] Delete tools                  ║" -ForegroundColor White
+    Write-Host "║  [3] Exit                          ║" -ForegroundColor White
+    Write-Host "╚════════════════════════════════════╝" -ForegroundColor Cyan
 
-    $c = Read-Host "Select"
+    $c = Read-Host "`nSelect"
 
     switch ($c) {
         "1" { Download-All }
