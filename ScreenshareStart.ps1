@@ -1,16 +1,11 @@
 cls
-# System Information Collection Script
-# This script collects system info including boot time, uptime, drives, and services
-
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   SYSTEM INFORMATION REPORT" -ForegroundColor Cyan
+Write-Host "   ScreenShare Start — Made by vMets" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Get current date for reference
 $CurrentDate = Get-Date
 
-# 1. SYSTEM INFORMATION
 Write-Host "SYSTEM:" -ForegroundColor DarkBlue
 $LastBootTime = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
 Write-Host "  Last Boot Time: " -NoNewline -ForegroundColor White
@@ -30,7 +25,6 @@ Write-Host "  Script Execution Time: " -NoNewline -ForegroundColor White
 Write-Host $ExecutionTime.ToString("h:mm:ss tt") -ForegroundColor White
 Write-Host ""
 
-# 2. Connected Drives
 Write-Host "DRIVES:" -ForegroundColor DarkBlue
 $Drives = Get-WmiObject -Class Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 }
 foreach ($Drive in $Drives) {
@@ -50,7 +44,6 @@ foreach ($Drive in $Drives) {
 }
 Write-Host ""
 
-# 3. Minecraft Status
 Write-Host "MINECRAFT:" -ForegroundColor DarkBlue
 
 $verdictFlags = @()
@@ -65,7 +58,6 @@ try {
         Write-Host "  Minecraft Start: " -NoNewline -ForegroundColor White
         Write-Host $mcProc.StartTime.ToString("yyyy-MM-dd h:mm:ss tt") -ForegroundColor White
         
-        # Format uptime nicely
         $mcUptimeParts = @()
         if ($mcUptime.Days -gt 0) { $mcUptimeParts += "$($mcUptime.Days) Days" }
         if ($mcUptime.Hours -gt 0) { $mcUptimeParts += "$($mcUptime.Hours) Hours" }
@@ -75,7 +67,6 @@ try {
         Write-Host "  MC Uptime: " -NoNewline -ForegroundColor White
         Write-Host ($mcUptimeParts -join ', ') -ForegroundColor White
         
-        # Get parent process
         $parentProc = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $($mcProc.Id)" | ForEach-Object { 
             if ($_.ParentProcessId) { Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue }
         }
@@ -86,7 +77,6 @@ try {
             Write-Host "  Parent Started: " -NoNewline -ForegroundColor White
             Write-Host $parentProc.StartTime.ToString("yyyy-MM-dd HH:mm:ss") -ForegroundColor White
             
-            # Check if parent is suspicious
             $suspiciousParents = @("cmd", "powershell", "wscript", "cscript", "rundll32", "mshta")
             if ($suspiciousParents -contains $parentProc.ProcessName.ToLower()) {
                 Write-Host "  ! WARNING: Minecraft launched from suspicious parent process!" -ForegroundColor Red
@@ -96,7 +86,6 @@ try {
             Write-Host "  Parent Process: Unknown" -ForegroundColor White
         }
 
-        # Get child processes
         $childProcs = Get-CimInstance -ClassName Win32_Process | Where-Object { $_.ParentProcessId -eq $mcProc.Id }
         if ($childProcs) {
             Write-Host "  Child Processes: " -NoNewline -ForegroundColor White
@@ -108,7 +97,6 @@ try {
                         Write-Host "    * " -NoNewline -ForegroundColor White
                         Write-Host ("{0} (PID: {1}) - Started: {2}" -f $childProc.ProcessName, $childProc.Id, $childProc.StartTime.ToString("HH:mm:ss")) -ForegroundColor White
                         
-                        # Check if child is suspicious
                         $suspiciousChildren = @("cmd", "powershell", "wscript", "cscript", "rundll32", "mshta", "regsvr32")
                         if ($suspiciousChildren -contains $childProc.ProcessName.ToLower()) {
                             Write-Host "      ! WARNING: Suspicious child process detected!" -ForegroundColor Red
@@ -121,12 +109,10 @@ try {
             Write-Host "  Child Processes: None" -ForegroundColor Green
         }
 
-        # Analyze process tree depth and injection chains
         $processChain = @()
         $currentProc = $mcProc
         
-        # Build process chain backwards
-        for ($i = 0; $i -lt 5; $i++) {  # Limit depth to prevent infinite loops
+        for ($i = 0; $i -lt 5; $i++) {
             $parent = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $($currentProc.Id)" | ForEach-Object { 
                 if ($_.ParentProcessId) { Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue }
             }
@@ -144,7 +130,6 @@ try {
             $chainStr += " -> $($mcProc.ProcessName)"
             Write-Host $chainStr -ForegroundColor Green
             
-            # Check for suspicious chain patterns
             $chainStrLower = $chainStr.ToLower()
             if ($chainStrLower -match "cmd.*powershell.*java" -or $chainStrLower -match "wscript.*java") {
                 Write-Host "    ! WARNING: Potential injection chain detected!" -ForegroundColor Red
@@ -152,7 +137,6 @@ try {
             }
         }
         
-        # Display verdict if any flags
         if ($verdictFlags.Count -gt 0) {
             Write-Host "`n  VERDICT:" -ForegroundColor Yellow
             foreach ($flag in $verdictFlags) {
@@ -170,7 +154,6 @@ try {
 }
 Write-Host ""
 
-# 4. Windows Services Status
 Write-Host "SERVICES:" -ForegroundColor DarkBlue
 
 $Services = @(
@@ -186,7 +169,6 @@ $Services = @(
     @{ Name = "PlugPlay"; Display = "Plug and Play" }
 )
 
-# Calculate padding for alignment
 $MaxNameLength = ($Services | ForEach-Object { $_.Name.Length } | Measure-Object -Maximum).Maximum + 2
 $MaxDisplayLength = 40
 
@@ -195,18 +177,16 @@ foreach ($Service in $Services) {
     $DisplayName = $Service.Display
     try {
         $Svc = Get-Service -Name $ServiceName -ErrorAction Stop
-        
-        # Pad the service name
+
         $PaddedName = $ServiceName.PadRight($MaxNameLength)
-        
-        # Truncate display name if too long
+
         if ($DisplayName.Length -gt $MaxDisplayLength) {
             $DisplayName = $DisplayName.Substring(0, $MaxDisplayLength - 3) + "..."
         }
         $PaddedDisplay = $DisplayName.PadRight($MaxDisplayLength)
         
         if ($Svc.Status -eq 'Running') {
-            # Try to get the start time
+
             $StartTime = $null
             $ServiceWMI = Get-WmiObject -Class Win32_Service | Where-Object { $_.Name -eq $ServiceName }
             if ($ServiceWMI -and $ServiceWMI.ProcessId -gt 0) {
@@ -233,7 +213,6 @@ foreach ($Service in $Services) {
 }
 Write-Host ""
 
-# 5. Recycle Bin Check
 Write-Host "RECYCLE BIN:" -ForegroundColor DarkBlue
 
 try {
@@ -262,8 +241,7 @@ try {
                     }
                 }
             }
-            
-            # Check if in boot instance
+
             $TimeSinceMod = $latestModTime - $LastBootTime
             $IsBootInstance = $TimeSinceMod.TotalSeconds -gt 0 -and $TimeSinceMod.TotalSeconds -lt $Uptime.TotalSeconds
             
@@ -306,17 +284,14 @@ try {
 }
 Write-Host ""
 
-# 6. USN Journal Status
 Write-Host "USN JOURNAL:" -ForegroundColor DarkBlue
 
-# Check if USN Journal was cleared
 try {
     $UsnEvent = Get-WinEvent -LogName "Application" -FilterXPath "*[System[EventID=3079]]" -MaxEvents 1 -ErrorAction SilentlyContinue
     if ($UsnEvent) {
         $EventTime = $UsnEvent.TimeCreated
         $FormattedTime = $EventTime.ToString("M/d/yyyy hh:mm:ss tt")
-        
-        # Check if in boot instance
+
         $TimeSinceEvent = $EventTime - $LastBootTime
         $IsBootInstance = $TimeSinceEvent.TotalSeconds -gt 0 -and $TimeSinceEvent.TotalSeconds -lt $Uptime.TotalSeconds
         
@@ -334,10 +309,8 @@ try {
 }
 Write-Host ""
 
-# 7. Event Log Checks
 Write-Host "EVENT LOGS:" -ForegroundColor DarkBlue
 
-# Function to check event logs
 function Check-EventLog {
     param($LogName, $EventID, $Message)
     
@@ -350,7 +323,7 @@ function Check-EventLog {
             Write-Host ("  ${Message}: $FormattedTime") -ForegroundColor White
         }
     } catch {
-        # If filter fails, try older method
+
         try {
             $event = Get-WinEvent -LogName $LogName | Where-Object { $_.Id -eq $EventID } | Select-Object -First 1
             if ($event) {
@@ -359,12 +332,11 @@ function Check-EventLog {
                 Write-Host ("  ${Message}: $FormattedTime") -ForegroundColor White
             }
         } catch {
-            # Silently ignore
+
         }
     }
 }
 
-# Check all event logs
 Check-EventLog "System" 104 "Event Logs cleared"
 Check-EventLog "System" 1102 "Event Logs cleared"
 Check-EventLog "System" 1074 "Last PC Shutdown"
@@ -372,7 +344,6 @@ Check-EventLog "Security" 4616 "System time changed"
 Check-EventLog "System" 6005 "Event Log Service started"
 Write-Host ""
 
-# 8. Volume Dismount Events
 Write-Host "VOLUME DISMOUNT:" -ForegroundColor DarkBlue
 
 $foundDismount = $false
@@ -387,7 +358,7 @@ try {
     }
 } catch {
     try {
-        # Try alternative method
+
         $DismountEvent = Get-WinEvent -LogName "Microsoft-Windows-Ntfs/Operational" -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq 303 } | Select-Object -First 1
         if ($DismountEvent) {
             $EventTime = $DismountEvent.TimeCreated
@@ -396,7 +367,7 @@ try {
             $foundDismount = $true
         }
     } catch {
-        # Silently ignore
+
     }
 }
 
@@ -405,10 +376,8 @@ if (-not $foundDismount) {
 }
 Write-Host ""
 
-# 9. Task Scheduler Events
 Write-Host "TASK SCHEDULER:" -ForegroundColor DarkBlue
 
-# Function to check Task Scheduler events
 function Check-TaskSchedulerEvent {
     param($EventID, $Description)
     
@@ -422,7 +391,7 @@ function Check-TaskSchedulerEvent {
         }
     } catch {
         try {
-            # Try alternative method
+
             $event = Get-WinEvent -LogName "Microsoft-Windows-TaskScheduler/Operational" -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq $EventID } | Select-Object -First 1
             if ($event) {
                 $EventTime = $event.TimeCreated
@@ -430,7 +399,7 @@ function Check-TaskSchedulerEvent {
                 Write-Host ("  ${Description}: $FormattedTime") -ForegroundColor White
             }
         } catch {
-            # Silently ignore
+
         }
     }
 }
@@ -440,7 +409,6 @@ Check-TaskSchedulerEvent 140 "Modified Scheduled Tasks"
 Check-TaskSchedulerEvent 106 "Created Scheduled Tasks"
 Write-Host ""
 
-# 10. Image File Execution Options
 Write-Host "IMAGE FILE EXECUTION OPTIONS:" -ForegroundColor DarkBlue
 
 $IFEOpath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options"
@@ -461,7 +429,7 @@ try {
                 }
             }
         } catch {
-            # No debugger value for this key, skip
+
         }
     }
     
@@ -478,7 +446,6 @@ try {
 }
 Write-Host ""
 
-# 11. Prefetch Integrity
 Write-Host "PREFETCH INTEGRITY:" -ForegroundColor DarkBlue
 
 $prefetchPath = "$env:SystemRoot\Prefetch"
@@ -596,7 +563,6 @@ if (Test-Path $prefetchPath) {
 }
 Write-Host ""
 
-# 12. Console Host History
 Write-Host "CONSOLE HOST HISTORY:" -ForegroundColor DarkBlue
 
 try {
@@ -605,7 +571,7 @@ try {
     if (Test-Path $consoleHistoryPath) {
         $historyFile = Get-Item -Path $consoleHistoryPath -Force
         
-        # Check if in boot instance
+# Resetting environment state to default behavior
         $TimeSinceMod = $historyFile.LastWriteTime - $LastBootTime
         $IsBootInstance = $TimeSinceMod.TotalSeconds -gt 0 -and $TimeSinceMod.TotalSeconds -lt $Uptime.TotalSeconds
         
@@ -635,7 +601,6 @@ try {
 }
 Write-Host ""
 
-# 13. Windows Defender Status
 Write-Host "WINDOWS DEFENDER:" -ForegroundColor DarkBlue
 
 try {
@@ -672,7 +637,6 @@ try {
 }
 Write-Host ""
 
-# 14. Security Settings Check
 Write-Host "SECURITY SETTINGS:" -ForegroundColor DarkBlue
 
 $settings = @(
@@ -723,7 +687,7 @@ foreach ($Setting in $settings) {
             }
         }
     } catch {
-        # Registry key doesn't exist - treat as default
+
         if ($Name -eq "CMD") {
             Write-Host "  $Name -> Enabled" -ForegroundColor Green
         } elseif ($Name -eq "PowerShell Logging") {
@@ -737,7 +701,6 @@ foreach ($Setting in $settings) {
 }
 Write-Host ""
 
-# 15. BAM Service Start Value
 Write-Host "BAM SERVICE:" -ForegroundColor DarkBlue
 
 try {
@@ -766,7 +729,6 @@ try {
 }
 Write-Host ""
 
-# 16. BAM - Executables Linked to Minecraft Session
 Write-Host "BAM - EXECUTABLES LINKED TO MINECRAFT SESSION:" -ForegroundColor DarkBlue
 
 try {
@@ -778,7 +740,6 @@ try {
     } else {
         $mcStart = $mcProc2.StartTime
 
-        # BAM stores last run time per user SID under each entry's SequenceNumber subkey
         $bamRoot = "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings"
         if (-not (Test-Path $bamRoot)) {
             $bamRoot = "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings"
@@ -795,7 +756,7 @@ try {
                 if (-not $entries) { continue }
 
                 foreach ($prop in $entries.PSObject.Properties) {
-                    # BAM values are binary (FILETIME); skip non-binary/meta props
+
                     if ($prop.Name -match '^PS|SequenceNumber|Version') { continue }
                     if ($prop.Value -isnot [byte[]]) { continue }
                     if ($prop.Value.Length -lt 8) { continue }
@@ -805,14 +766,11 @@ try {
                         if ($ft -le 0) { continue }
                         $lastRun   = [datetime]::FromFileTime($ft)
 
-                        # only include entries that ran within the current Minecraft session
                         if ($lastRun -lt $mcStart) { continue }
 
                         $exePath   = $prop.Name -replace '\\Device\\HarddiskVolume\d+', '' -replace '\\', '\'
                         $exeName   = Split-Path $exePath -Leaf
-                        
-                        # SKIP: Only include entries that start with \Device\HarddiskVolume (actual file paths)
-                        # This filters out AppX packages and other non-file entries
+
                         if ($prop.Name -notmatch '^\\Device\\HarddiskVolume') {
                             continue
                         }
@@ -829,7 +787,7 @@ try {
             if ($bamHits.Count -eq 0) {
                 Write-Host "  No BAM entries found during current Minecraft session" -ForegroundColor Green
             } else {
-                # sort newest first, skip javaw itself
+
                 $filtered = $bamHits | Where-Object { $_.Name -notmatch '^javaw?\.exe$' } | Sort-Object LastRun -Descending
                 if ($filtered.Count -eq 0) {
                     Write-Host "  No other executables ran during current Minecraft session" -ForegroundColor Green
@@ -839,8 +797,7 @@ try {
                         $timeDiff = ($entry.LastRun - $mcStart).TotalSeconds
                         $tag      = if ($timeDiff -le 120) { " [within 2min of launch]" } else { "" }
                         $color    = if ($tag) { "Red" } else { "White" }
-                        
-                        # Check digital signature
+
                         $sigStatus = ""
                         $sigColor = "White"
                         try {
@@ -881,7 +838,6 @@ try {
 }
 Write-Host ""
 
-# 17. RUN Keys (Startup Items)
 Write-Host "STARTUP ITEMS (RUN KEYS):" -ForegroundColor DarkBlue
 
 $runKeys = @(
@@ -907,7 +863,7 @@ foreach ($runKey in $runKeys) {
             $value = $prop.Value
             $propName = $prop.Name
             
-            # Parse the path from the value (could be just a filename or full path)
+# Handling basic setup tasks required for initialization
             $filePath = $value
             if ($value -match '"([^"]+\.exe)"') {
                 $filePath = $Matches[1]
@@ -916,11 +872,10 @@ foreach ($runKey in $runKeys) {
             } elseif ($value -match '([A-Za-z]:\\[^"]+\.exe)') {
                 $filePath = $Matches[1]
             }
-            
-            # Check if it's a full path or just a filename
+
             $isFullPath = Test-Path $filePath -ErrorAction SilentlyContinue
             if (-not $isFullPath) {
-                # Try to find the file in System32 or Program Files
+
                 $possiblePaths = @(
                     "$env:SystemRoot\System32\$filePath",
                     "$env:SystemRoot\$filePath",
@@ -954,7 +909,6 @@ foreach ($runKey in $runKeys) {
     Write-Host ""
 }
 
-# Display detailed startup items with signatures
 if ($startupItems.Count -gt 0) {
     Write-Host "  STARTUP ITEMS DETAILED ($($startupItems.Count) found):" -ForegroundColor White
     
@@ -964,7 +918,7 @@ if ($startupItems.Count -gt 0) {
         Write-Host ("({0})" -f $item.KeyName) -NoNewline -ForegroundColor Gray
         
         if ($item.IsFullPath) {
-            # Check signature
+
             $sigStatus = ""
             $sigColor = "White"
             try {
