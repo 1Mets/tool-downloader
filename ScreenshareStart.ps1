@@ -1,7 +1,7 @@
 cls
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host "   ScreenShare Start — Made by vMets" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 
 $CurrentDate = Get-Date
